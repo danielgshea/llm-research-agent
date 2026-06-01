@@ -28,7 +28,14 @@ from deepagents.backends.context_hub import ContextHubBackend
 from langchain.chat_models import init_chat_model
 from langsmith import Client
 
+from llm_research_agent.utils.budget import StepBudgetMiddleware
 from llm_research_agent.utils.tools import fetch_page, web_search
+
+# Hard backstop: cap graph super-steps so a non-converging run can't run
+# unbounded. StepBudgetMiddleware forces a clean final answer well before this.
+RECURSION_LIMIT = 75
+# Force a final, tool-free answer after this many model turns (~2 steps each).
+MAX_MODEL_TURNS = 25
 
 # Context Hub agent repos — the source of truth for skills, memory, and the
 # system prompt. "-/<name>" resolves to the workspace owner; override via env
@@ -75,4 +82,5 @@ agent = create_deep_agent(
     backend=backend,
     skills=["/skills/"],
     memory=MEMORY_SOURCES,
-)
+    middleware=[StepBudgetMiddleware(max_model_turns=MAX_MODEL_TURNS)],
+).with_config({"recursion_limit": RECURSION_LIMIT})

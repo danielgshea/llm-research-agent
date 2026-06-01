@@ -36,6 +36,12 @@ it runs.
 - **Continuous learning** — the agent updates memory and the scorecard with its
   own `write_file`/`edit_file` tools, which commit straight back to the Context
   Hub. Knowledge compounds across sessions instead of restarting each time.
+- **Bounded research** — the prompt sets a search budget and stopping criteria,
+  and a `StepBudgetMiddleware` forces a clean, tool-free final answer once the
+  model-turn budget is nearly spent. A `recursion_limit` (`agent.py`) is the hard
+  backstop. Together these prevent the agent from looping on hard-to-verify,
+  fast-moving figures — the user always gets a finished, caveated answer rather
+  than a `GraphRecursionError`.
 
 ### Architecture: everything lives in the Context Hub
 
