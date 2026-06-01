@@ -1,0 +1,13 @@
+[project]
+name = "llm-research-agent"
+version = "0.1.0"
+description = "A DeepAgents research analyst for the LLM landscape, with Context Hub skills and long-term scorecard memory."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "deepagents>=0.6.7",
+    "langchain>=1.3.2",
+    "langgraph-cli[inmem]>=0.4.27",
+    "langsmith>=0.4.0",
+    "tavily>=1.1.0",
+]
