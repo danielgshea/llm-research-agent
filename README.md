@@ -22,7 +22,8 @@ it runs.
 - **Tools** — Tavily `web_search` (multi-result, with URLs + dates) and
   `fetch_page` (full-page extraction) for sourced research.
 - **Skills** — five research playbooks loaded on demand via progressive
-  disclosure, stored in the **LangSmith Context Hub**:
+  disclosure, each stored as its own **LangSmith Context Hub skill repo**
+  (`pull_skill`), pulled at startup:
   - `model-evaluation` — how to research and compare current models.
   - `benchmark-analysis` — the major benchmarks and how to judge their validity
     (contamination, saturation, self-reported vs independent, construct validity).
@@ -31,8 +32,10 @@ it runs.
   - `continuous-learning` — what to capture after each task so the agent improves.
 - **Long-term memory** — `AGENTS.md` (standing context + learnings) and
   `scorecard.md` (ranked best-models-per-category, with scores, sources, dates,
-  and caveats), also in the Context Hub. They're loaded into context every run.
-- **System prompt** — pulled from the Context Hub at startup, not hard-coded.
+  and caveats), in the Context Hub agent repo `llm-research-memory`. Loaded into
+  context every run.
+- **System prompt** — pulled from the **LangSmith Prompt Hub** prompt
+  `llm-research-prompt` at startup (its system message), not hard-coded.
 - **Continuous learning** — the agent updates memory and the scorecard with its
   own `write_file`/`edit_file` tools, which commit straight back to the Context
   Hub. Knowledge compounds across sessions instead of restarting each time.
@@ -43,21 +46,24 @@ it runs.
   fast-moving figures — the user always gets a finished, caveated answer rather
   than a `GraphRecursionError`.
 
-### Architecture: everything lives in the Context Hub
+### Architecture: state lives in LangSmith
 
-This repo holds **only the agent code**. The agent's skills, memory, and system
-prompt are stored in the **LangSmith Context Hub** — the single source of truth —
-so there are no local copies to drift out of date. A `CompositeBackend` routes
-the agent's filesystem by path:
+This repo holds **only the agent code** — skills, memory, and the system prompt
+all live in LangSmith (the single source of truth), so there are no local copies
+to drift out of date. At construction the agent pulls the **Prompt Hub** prompt
+`llm-research-prompt` (system message) and each **skill repo** (`pull_skill`),
+staging the skills locally so a `CompositeBackend` can serve them:
 
 ```
-/skills/   ─▶ ContextHubBackend(-/llm-research-skills)   # curated playbooks (persistent)
-/memory/   ─▶ ContextHubBackend(-/llm-research-memory)   # AGENTS.md + scorecard.md (agent-written)
-everything else ─▶ StateBackend()                        # ephemeral scratch (todos, working notes)
+/skills/   ─▶ FilesystemBackend(temp dir, virtual_mode=True)  # skill repos pulled at startup (progressive disclosure)
+/memory/   ─▶ ContextHubBackend("llm-research-memory")        # AGENTS.md + scorecard.md (agent-written, persistent)
+everything else ─▶ StateBackend()                             # ephemeral scratch (todos, working notes)
 ```
 
-(The system prompt is pulled from a third repo, `-/llm-research-prompt`, at
-construction time.)
+Skills and the prompt are pulled at startup (curated, stable — edit them in
+LangSmith and restart/redeploy). Memory is the evolving state, written back to the
+Context Hub at runtime. The key must be **scoped to the workspace** these repos
+live in (then it resolves its own tenant — no `LANGSMITH_WORKSPACE_ID` needed).
 
 ## Project layout
 
@@ -88,10 +94,12 @@ cp .env.example .env   # then fill in your keys
 ```
 
 You need `ANTHROPIC_API_KEY`, `TAVILY_API_KEY`, and `LANGSMITH_API_KEY`. Leaving
-`LANGSMITH_TRACING=true` sends traces to LangSmith. The Context Hub repos default
-to the workspace owner (`-/llm-research-skills`, `-/llm-research-memory`,
-`-/llm-research-prompt`); override with `LLM_RESEARCH_SKILLS_REPO`,
-`LLM_RESEARCH_MEMORY_REPO`, and `LLM_RESEARCH_PROMPT_REPO`.
+`LANGSMITH_TRACING=true` sends traces to LangSmith. **Use a `LANGSMITH_API_KEY`
+scoped to the workspace** that holds the prompt/skill/memory repos — it then
+resolves its own tenant and needs no `LANGSMITH_WORKSPACE_ID`. (An
+org/multi-workspace key resolves no tenant and 404s on the repos; set
+`LANGSMITH_WORKSPACE_ID` for those.) Resource names are overridable via
+`LLM_RESEARCH_PROMPT_NAME`, `LLM_RESEARCH_MEMORY_REPO`, and `LLM_RESEARCH_SKILLS`.
 
 ## 3. Run
 
@@ -100,22 +108,23 @@ uv run langgraph dev
 ```
 
 This serves the `llm_research_agent` graph from `langgraph.json` in LangGraph
-Studio. Skills, memory, and the system prompt are read directly from the Context
-Hub — no per-invocation seeding needed.
+Studio. The system prompt, skills, and memory are read directly from LangSmith —
+no per-invocation seeding needed.
 
 ## Editing content
 
-All of the agent's editable content lives in the Context Hub (the source of
-truth — there are no local copies in this repo):
+All of the agent's editable content lives in LangSmith (the source of truth —
+there are no local copies in this repo):
 
-- **System prompt** (`-/llm-research-prompt`, `SYSTEM_PROMPT.md`): edit in the
-  Hub UI. It's pulled fresh each time the graph is constructed.
-- **Skills** (`-/llm-research-skills`, `<name>/SKILL.md`): edit in the Hub UI to
-  refine the research playbooks.
-- **Memory + scorecard** (`-/llm-research-memory`, `AGENTS.md` + `scorecard.md`):
-  primarily owned by the agent — it writes back as it learns. Editable in the Hub
-  if you need to correct or reset it.
+- **System prompt** — Prompt Hub prompt `llm-research-prompt` (its system
+  message): edit in the LangSmith UI; pulled fresh each time the graph is built.
+- **Skills** — one Context Hub **skill repo** per skill (`model-evaluation`,
+  `benchmark-analysis`, `landscape-mapping`, `scorecard-maintenance`,
+  `continuous-learning`), each with a `SKILL.md`: edit in the UI to refine a
+  playbook; pulled at startup.
+- **Memory + scorecard** — Context Hub agent repo `llm-research-memory`
+  (`AGENTS.md` + `scorecard.md`): primarily owned by the agent — it writes back
+  as it learns. Editable in the UI to correct or reset.
 
-> Note: because content is Hub-only, it isn't version-controlled in git. Use the
-> Context Hub's own commit history (each write is a commit) to track and revert
-> changes.
+> Note: because content lives in LangSmith, it isn't version-controlled in git.
+> Use each repo's own commit history (each write is a commit) to track/revert.
