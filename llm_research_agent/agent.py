@@ -131,7 +131,7 @@ backend = CompositeBackend(
 
 async_subagents = [
     AsyncSubAgent(
-        name="coder",
+        name="code-gen-agent",
         description=(
             "Use PROACTIVELY for any task whose deliverable is runnable code — "
             "writing/generating scripts, programs, data visualizations, or "
@@ -141,7 +141,7 @@ async_subagents = [
             "data/values to embed, expected inputs/outputs, output file path, and "
             "the language/libraries to use. See the `code-generation` skill."
         ),
-        graph_id="coder",
+        graph_id="code_gen_agent",
         url="https://code-gen-agent-deployed-682e04b101d656aba3008a1dbef1884e.us.langgraph.app"
     ),
 ]
