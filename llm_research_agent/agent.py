@@ -39,7 +39,7 @@ from langchain.chat_models import init_chat_model
 from langsmith import Client
 from langsmith.sandbox import SandboxClient
 
-from llm_research_agent.utils.budget import StepBudgetMiddleware
+from llm_research_agent.utils.budget import RecursionFloorMiddleware, StepBudgetMiddleware
 from llm_research_agent.utils.tools import fetch_page, web_search
 
 logger = logging.getLogger(__name__)
@@ -154,5 +154,8 @@ agent = create_deep_agent(
     skills=["/skills/"],
     memory=MEMORY_SOURCES,
     subagents=async_subagents,
-    middleware=[StepBudgetMiddleware(max_model_turns=MAX_MODEL_TURNS)],
+    middleware=[
+        RecursionFloorMiddleware(minimum=25),
+        StepBudgetMiddleware(max_model_turns=MAX_MODEL_TURNS),
+    ],
 ).with_config({"recursion_limit": RECURSION_LIMIT})

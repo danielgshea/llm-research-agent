@@ -22,16 +22,43 @@ so it needs no extra state channel and is robust across sync/async execution.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from deepagents.middleware._utils import append_to_system_message
 from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.messages import AIMessage
+from langgraph.config import get_config
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from langchain.agents.middleware.types import ModelRequest, ModelResponse
+    from langchain_core.runnables import RunnableConfig
+    from langgraph.runtime import Runtime
+
+MIN_RECURSION_LIMIT = 25
+
+
+class RecursionFloorMiddleware(AgentMiddleware):
+    """Clamp the effective `recursion_limit` upward so caller overrides can't starve the agent."""
+
+    def __init__(self, minimum: int = MIN_RECURSION_LIMIT) -> None:
+        self.minimum = minimum
+
+    def _apply_floor(self, config: RunnableConfig) -> None:
+        """Raise `config['recursion_limit']` to `self.minimum` when present and lower."""
+        current = config.get("recursion_limit", self.minimum)
+        if current < self.minimum:
+            config["recursion_limit"] = self.minimum
+
+    def before_agent(self, state: Any, runtime: Runtime) -> None:
+        """Clamp the live runtime config's recursion_limit upward."""
+        self._apply_floor(get_config())
+
+    async def abefore_agent(self, state: Any, runtime: Runtime) -> None:
+        """Async variant of `before_agent`."""
+        self._apply_floor(get_config())
+
 
 _FINAL_ANSWER_INSTRUCTION = """
 
