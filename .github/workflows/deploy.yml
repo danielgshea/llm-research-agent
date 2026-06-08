@@ -1,0 +1,62 @@
+name: Deploy to LangSmith
+
+# Rebuild the LangSmith deployment on every merge to main.
+# `push: main` fires on the merge commit (and any direct push to main).
+# Also exposed as a manual button in the Actions tab.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Don't let two deploys race; cancel an in-flight one if a newer commit lands.
+concurrency:
+  group: langsmith-deploy
+  cancel-in-progress: true
+
+env:
+  # Name of the LangSmith deployment to find-or-update.
+  # Matches the default `langgraph deploy` uses locally (the project dir name).
+  DEPLOYMENT_NAME: llm-research
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      # langgraph.json reads runtime env from ./.env, which is gitignored.
+      # Materialize it from GitHub secrets so the deployment gets its env vars.
+      # Secrets are passed via env: (never interpolated into the script) to
+      # avoid log leakage and shell-injection.
+      - name: Write .env from secrets
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LANGSMITH_API_KEY_GATEWAY: ${{ secrets.LANGSMITH_API_KEY_GATEWAY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+        run: |
+          cat > .env <<EOF
+          ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+          LANGSMITH_API_KEY_GATEWAY=${LANGSMITH_API_KEY_GATEWAY}
+          TAVILY_API_KEY=${TAVILY_API_KEY}
+          LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+          LANGSMITH_TRACING=true
+          LANGSMITH_PROJECT=llm-research
+          EOF
+
+      # Remote build: LangSmith builds the image from langgraph.json — no Docker
+      # in the runner. --name finds the existing deployment and ships a new
+      # revision (creates it if absent). --no-input never prompts.
+      - name: Deploy
+        env:
+          # Authenticates the deploy CLI itself.
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+        run: |
+          uv run langgraph deploy --remote --no-input --name "$DEPLOYMENT_NAME"
