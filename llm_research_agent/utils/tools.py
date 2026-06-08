@@ -55,7 +55,7 @@ def web_search(
         {
             "title": r.get("title"),
             "url": r.get("url"),
-            "published_date": r.get("published_date"),
+            "published_date": r.get("date"),
             "content": r.get("content"),
         }
         for r in response.get("results", [])

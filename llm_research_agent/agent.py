@@ -54,7 +54,7 @@ SKILL_HANDLES = [
         "LLM_RESEARCH_SKILLS",
         "model-evaluation,benchmark-analysis,landscape-mapping,"
         "scorecard-maintenance,continuous-learning,code-generation,"
-        "shared-workspace",
+        "codegen-shared-workspace",
     ).split(",")
     if h.strip()
 ]
